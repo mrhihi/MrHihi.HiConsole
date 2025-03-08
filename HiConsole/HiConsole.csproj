@@ -1,0 +1,18 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <PackageId>MrHihi.HiConsole</PackageId>
+    <Version>1.0.0</Version>
+    <Authors>mrhihi</Authors>
+    <Description>HiConsole is a simple prompt ui for console applications.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageProjectUrl>https://github.com/mrhihi/MrHihi.HiConsole</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/mrhihi/MrHihi.HiConsole</RepositoryUrl>
+    <PackageReadmeFile>Readme.md</PackageReadmeFile>
+    <TargetFrameworks>net8.0</TargetFrameworks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+      <None Include="..\Readme.md" Pack="true" PackagePath="\"/>
+  </ItemGroup>
+</Project>
