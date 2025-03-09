@@ -18,9 +18,25 @@ public class CommandPrompt
         _mode = mode;
     }
 
+    public class BeforeCommandEnterArgs : EventArgs
+    {
+        public string Buffer { get; set; } = string.Empty;
+        public string InputLine { get; set; } = string.Empty;
+        public bool TriggerSend { get; set; } = false;
+    }
+    public event EventHandler<BeforeCommandEnterArgs>? BeforeCommandEnter;
+    protected void OnBeforeCommandEnter(BeforeCommandEnterArgs e)
+    {
+        if (BeforeCommandEnter == null) return;
+        e.Buffer = _screen.GetBuffer();
+        e.InputLine = _screen.GetInputLine();
+        BeforeCommandEnter?.Invoke(this, e);
+    }
+
     public class CommandEnterArgs : EventArgs
     {
         public string Command { get; set; } = string.Empty;
+        public string Trigger { get; set; } = string.Empty;
         public bool Continue { get; set; } = true;
     }
     public event EventHandler<CommandEnterArgs>? CommandEnter;
@@ -187,17 +203,30 @@ public class CommandPrompt
                 }
                 else
                 {
-                    if (_mode == enumChatMode.OneLineCommand || _mode == enumChatMode.Hybrid)
+                    var be = new BeforeCommandEnterArgs();
+                    OnBeforeCommandEnter(be);
+                    if (be.TriggerSend)
                     {
-                        if (_screen.ScreenIsEmpty) // 表示只有當前輸入行有資料
-                        {
-                            var e = new CommandEnterArgs();
-                            sendCommand(_screen.GetTextAndReset(), e);
-                            if (e.Continue) continue;
-                            break;
-                        }
+                        var e = new CommandEnterArgs();
+                        e.Trigger = be.InputLine;
+                        sendCommand(_screen.GetTextAndReset(), e);
+                        if (e.Continue) continue;
+                        break;
                     }
-                    _screen.NewLine();
+                    else
+                    {
+                        if (_mode == enumChatMode.OneLineCommand || _mode == enumChatMode.Hybrid)
+                        {
+                            if (_screen.ScreenIsEmpty) // 表示只有當前輸入行有資料
+                            {
+                                var e = new CommandEnterArgs();
+                                sendCommand(_screen.GetTextAndReset(), e);
+                                if (e.Continue) continue;
+                                break;
+                            }
+                        }
+                        _screen.NewLine();
+                    }
                 }
             }
             else if (char.IsControl(key.KeyChar))

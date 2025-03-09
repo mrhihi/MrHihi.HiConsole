@@ -28,7 +28,7 @@ public class ScreenBuffer
     {
         _buffer.Remove(_buffer.Length - 1, 1);
         // 計算 textArea 最後一行的長度
-        var allLines = _buffer.ToString().Split('\n');
+        var allLines = GetBuffer().Split('\n');
         int lastLineLength = allLines.Last().Sum(c => isCKJ(c) ? 2 : 1) + ((allLines.Length>1)?0:promptLength);
         _inputLine.Append(allLines.Last());
         // 移除 textArea 最後一行
@@ -61,6 +61,16 @@ public class ScreenBuffer
         Console.WriteLine();
     }
 
+    public string GetBuffer()
+    {
+        return _buffer.ToString();
+    }
+
+    public string GetInputLine()
+    {
+        return _inputLine.ToString();
+    }
+
     /// <summary>
     /// Gets the text in the buffer and the input line and resets the input line.
     /// </summary>
@@ -68,7 +78,7 @@ public class ScreenBuffer
     public string GetTextAndReset()
     {
         _buffer.Append(_inputLine); // 將最後一行的資料加入
-        var text = _buffer.ToString();
+        var text = GetBuffer();
         // Console.WriteLine(" debug:" + text);
         Reset();
         return text;
