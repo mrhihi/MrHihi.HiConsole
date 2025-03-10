@@ -49,6 +49,10 @@ public class UnitTest1
             {
                 e.TriggerSend = true;
             }
+            else if (e.InputLine == "")
+            {
+                e.TriggerSend = false; // Prevent empty trigger command in multi-line mode
+            }
         };
         commandPrompt.Start("Welcome to HiConsole!", "-> ");
     }

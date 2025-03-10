@@ -196,10 +196,16 @@ public class CommandPrompt
                 {
                     if (_screen.ScreenIsEmpty) continue;
 
-                    var e = new CommandEnterArgs();
-                    sendCommand(_screen.GetTextAndReset(), e);
-                    if (e.Continue) continue;
-                    break;
+                    var be = new BeforeCommandEnterArgs();
+                    be.TriggerSend = true;
+                    OnBeforeCommandEnter(be);
+                    if (be.TriggerSend)
+                    {
+                        var e = new CommandEnterArgs();
+                        sendCommand(_screen.GetTextAndReset(), e);
+                        if (e.Continue) continue;
+                        break;
+                    }
                 }
                 else
                 {
