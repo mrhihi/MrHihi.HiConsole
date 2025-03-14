@@ -1,26 +1,13 @@
 ﻿using MrHihi.HiConsole;
 
-var commandPrompt = new CommandPrompt(enumChatMode.OneLineCommand);
+var commandPrompt = new CommandPrompt(enumChatMode.OneLineCommand, "Welcome to HiConsole!", "-> ");
 
-commandPrompt.CommandEnter += (sender, e) =>
+commandPrompt.MultiLineCommand_EnterPress += (sender, e) =>
 {
-    Console.WriteLine($"Command: {e.Command}");
-
-    if (e.Command.TrimEnd('\n') == "exit")
+    if (e.Command == "exit")
     {
-        e.Continue = false;
+        e.Cancel = true;
     }
 };
 
-commandPrompt.KeyPress += (sender, e) =>
-{
-    if (e.Key.Key == ConsoleKey.F && e.Key.Modifiers == ConsoleModifiers.Control)
-    {
-        Console.WriteLine("Ctrl+F is pressed.");
-        var p = sender as CommandPrompt;
-        p?.SetText("new text\nset to buffer\nthis is a test\n");
-        e.Continue = false;
-    }
-};
-
-commandPrompt.Start("Welcome to HiConsole!", "-> ");
+commandPrompt.Start();

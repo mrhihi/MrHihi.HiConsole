@@ -3,14 +3,34 @@
 namespace MrHihi.HiConsole;
 public class CommandPrompt
 {
-    private List<string> _consoleHistory = new List<string>();
-    private ScreenBuffer _screen = new ScreenBuffer();
-
+    private readonly TextAreaCoordinate _textArea;
+    private readonly string _welcome;
+    private readonly string _prompt;
     private enumChatMode _mode;
-    public CommandPrompt(enumChatMode mode)
+    public CommandPrompt(enumChatMode mode, string welcome, string prompt)
     {
         _mode = mode;
+        _welcome = welcome;
+        _prompt = prompt;
+        WriteWelcome();
+        WritePrompt();
+        _textArea = new TextAreaCoordinate();
     }
+    public void WritePrompt()
+    {
+        Console.Write(_prompt);
+    }
+    public void WriteWelcome()
+    {
+       Console.WriteLine(_welcome);
+    }
+    private void writeResult(Action print)
+    {
+        Console.WriteLine();
+        print();
+        Console.WriteLine();
+    }
+
     public enumChatMode ChatMode {get { return _mode;}}
 
     public void ChangeMode(enumChatMode mode)
@@ -18,82 +38,46 @@ public class CommandPrompt
         _mode = mode;
     }
 
-    /// <summary>
-    /// only works when the mode is MultiLineCommand or Hybrid
-    /// </summary>
-    /// <value>true: allow empty line / false: disallow empty line</value>
-    public bool AllowEmptyLine { get; set; } = true;
-
-    public class BeforeCommandEnterArgs : EventArgs
+    public class EnterPressArgs : EventArgs
     {
-        public string Buffer { get; set; } = string.Empty;
-        public string InputLine { get; set; } = string.Empty;
-        public bool TriggerSend { get; set; } = false;
-    }
-    public event EventHandler<BeforeCommandEnterArgs>? BeforeCommandEnter;
-    protected void OnBeforeCommandEnter(BeforeCommandEnterArgs e)
-    {
-        if (BeforeCommandEnter == null) return;
-        e.Buffer = _screen.GetBuffer();
-        e.InputLine = _screen.GetInputLine();
-        BeforeCommandEnter?.Invoke(this, e);
-    }
-
-    public class CommandEnterArgs : EventArgs
-    {
+        public required Action<Action> WriteResult { get; set; }
         public string Command { get; set; } = string.Empty;
-        public string Trigger { get; set; } = string.Empty;
-        public bool Continue { get; set; } = true;
+        public string Buffer { get; set; } = string.Empty;
+        public bool Triggered { get; set; } = false;
+        public bool Cancel { get; set; } = false;
     }
-    public event EventHandler<CommandEnterArgs>? CommandEnter;
+    public event EventHandler<EnterPressArgs>? MultiLineCommand_EnterPress;
 
-    protected void OnCommandEnter(CommandEnterArgs e)
+    protected virtual void OnMultiLineCommand_EnterPress(EnterPressArgs e)
     {
-        CommandEnter?.Invoke(this, e);
+        MultiLineCommand_EnterPress?.Invoke(this, e);
+    }
+
+    public event EventHandler<EnterPressArgs>? OneLineCommand_EnterPress;
+    protected virtual void OnOneLineCommand_EnterPress(EnterPressArgs e)
+    {
+        OneLineCommand_EnterPress?.Invoke(this, e);
     }
 
     public class KeyPressArgs : EventArgs
     {
         public ConsoleKeyInfo Key { get; set; }
-        public bool Continue { get; set; } = true;
+        /// <summary>
+        /// Set to true: Bypass onetime key process.
+        /// </summary>
+        /// <value></value>
+        public bool Processed { get; set; } = false;
+        /// <summary>
+        /// Set to true: Stope waitting key read.
+        /// </summary>
+        /// <value></value>
+        public bool Cancel { get; set; } = false;
     }
     public event EventHandler<KeyPressArgs>? KeyPress;
     
     protected void OnKeyPress(KeyPressArgs e)
     {
         KeyPress?.Invoke(this, e);
-    }
-
-    /// <summary>
-    /// Sets the text into the console.(buffer and input line will be reset)
-    /// </summary>
-    /// <param name="text"></param>
-    public void SetText(string text)
-    {
-        _screen.WriteWelcome();
-        _screen.WritePrompt();
-        _screen.SetText(text);
-    }
-    private void sendCommand(string text, CommandEnterArgs e)
-    {
-        var t = text.TrimEnd('\n');
-        _consoleHistory.Add(t);
-        e.Command = t;
-        _screen.WriteLine();
-        OnCommandEnter(e);
-        _screen.WritePrompt();
-    }
-    private void debug(string text)
-    {
-        // 先紀錄 Console 的位置
-        int left = _screen.CursorLeft;
-        int top = _screen.CursorTop;
-
-        // 移到第一行的最後面
-        _screen.SetCursorPosition(0, 0);
-        _screen.Write(text);
-        // 移回原本的位置
-        _screen.SetCursorPosition(left, top);
     }
 
     /// <summary>
@@ -106,104 +90,82 @@ public class CommandPrompt
         return key.Key == ConsoleKey.D && key.Modifiers == ConsoleModifiers.Control;
     }
 
+    protected virtual bool IsTriggerSend(EnterPressArgs e)
+    {
+        if (_mode == enumChatMode.OneLineCommand)
+        {
+            e.Triggered = true;
+            Console.WriteLine();
+            OnOneLineCommand_EnterPress(e);
+            if (e.Triggered && !e.Cancel)
+            {
+                WritePrompt();
+                _textArea.Reset();
+            }
+            return true;
+        }
+        else if (_textArea.IsAtEnd)
+        {
+            _textArea.NewLine();
+            OnMultiLineCommand_EnterPress(e);
+            if (e.Triggered)
+            {
+                WritePrompt();
+                _textArea.Reset();
+            }
+            return true;
+        }
+        return false;
+    }
+
     /// <summary>
     /// Starts the console prompt.
     /// </summary>
     /// <param name="welcome"> Welcome message. </param>
     /// <param name="prompt"> Prompt message. </param>
-    public void Start(string welcome, string prompt)
+    public void Start()
     {
-        _screen.SetPrompt(prompt, welcome);
-        _screen.OutputEncoding = Encoding.UTF8;
-        ConsoleKeyInfo key;
-
-        _screen.WriteWelcome();
-        _screen.WritePrompt();
         while (true)
         {
-            key = _screen.ReadKey(true);
-
+            ConsoleKeyInfo keyInfo = Console.ReadKey(true);
             var kpe = new KeyPressArgs();
-            kpe.Key = key;
+            kpe.Key = keyInfo;
             OnKeyPress(kpe);
-            if (!kpe.Continue) continue;
+            if (kpe.Cancel) break; // Stop waiting key read.
+            if (kpe.Processed) continue; // Bypass onetime key process.
 
-            if (_screen.KeyProcessor(key))
+            if (_textArea.ProcessKey(keyInfo))
             {
-                continue;
+                // do nothing
             }
-            else if (IsStopeInput(key))
+            else if (IsStopeInput(keyInfo))
             {
                 break;
             }
-            else if (key.Key == ConsoleKey.Enter)
+            else if (keyInfo.Key == ConsoleKey.Enter)
             {
-                if (_screen.InputLineIsEmpty) // 最後一行是空的時，按下 Enter 後檢查是否要送出
+                var e = new EnterPressArgs
                 {
-                    if (_screen.ScreenIsEmpty)
-                    {
-                        if (AllowEmptyLine && _mode != enumChatMode.OneLineCommand)
-                        {
-                            _screen.NewLine();
-                            _screen.WritePrompt();
-                        }
-                        continue;
-                    }
-                    var be = new BeforeCommandEnterArgs();
-                    be.TriggerSend = true;
-                    OnBeforeCommandEnter(be);
-                    if (be.TriggerSend)
-                    {
-                        var e = new CommandEnterArgs();
-                        sendCommand(_screen.GetTextAndReset(), e);
-                        if (e.Continue) continue;
-                        break;
-                    }
-                    else
-                    {
-                        if (AllowEmptyLine && _mode != enumChatMode.OneLineCommand)
-                        {
-                            _screen.NewLine();
-                            _screen.WritePrompt();
-                        }
-                    }
+                    Command = _textArea.LastLine,
+                    Buffer = _textArea.AboveLine,
+                    WriteResult = writeResult
+                };
+                if (IsTriggerSend(e))
+                {
+                    if (e.Cancel) break;
                 }
                 else
                 {
-                    var be = new BeforeCommandEnterArgs();
-                    OnBeforeCommandEnter(be);
-                    if (be.TriggerSend)
-                    {
-                        var e = new CommandEnterArgs();
-                        e.Trigger = be.InputLine;
-                        sendCommand(_screen.GetTextAndReset(), e);
-                        if (e.Continue) continue;
-                        break;
-                    }
-                    else
-                    {
-                        if (_mode == enumChatMode.OneLineCommand || _mode == enumChatMode.Hybrid)
-                        {
-                            if (_screen.ScreenIsEmpty) // 表示只有當前輸入行有資料
-                            {
-                                var e = new CommandEnterArgs();
-                                sendCommand(_screen.GetTextAndReset(), e);
-                                if (e.Continue) continue;
-                                break;
-                            }
-                        }
-                        _screen.NewLine();
-                        _screen.WritePrompt();
-                    }
+                    _textArea.NewLine();
                 }
             }
-            else if (char.IsControl(key.KeyChar))
+            else if (char.IsControl(keyInfo.KeyChar))
             {
-                continue;
+                // do nothing
             }
             else
             {
-                _screen.Append(key.KeyChar);
+                _textArea.Insert(keyInfo.KeyChar);
             }
         }
     }

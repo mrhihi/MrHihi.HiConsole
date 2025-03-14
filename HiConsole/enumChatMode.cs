@@ -2,6 +2,5 @@
 public enum enumChatMode
 {
     OneLineCommand,
-    MultiLineCommand,
-    Hybrid
+    MultiLineCommand
 }
