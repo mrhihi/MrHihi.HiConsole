@@ -4,9 +4,26 @@ namespace MrHihi.HiConsole.Test;
 public class UnitTest1
 {
     [Fact]
-    public void Test1()
+    public void TestOneLineCommand()
     {
-        var commandPrompt = new CommandPrompt(enumChatMode.OneLineCommand);
+        startCommandPrompt(enumChatMode.OneLineCommand);
+    }
+
+    [Fact]
+    public void TestMultiLineCommand()
+    {
+        startCommandPrompt(enumChatMode.MultiLineCommand);
+    }
+
+    [Fact]
+    public void TestHybrid()
+    {
+        startCommandPrompt(enumChatMode.Hybrid);
+    }
+
+    private void startCommandPrompt(enumChatMode mode)
+    {
+        var commandPrompt = new CommandPrompt(mode);;
         commandPrompt.CommandEnter += (sender, e) =>
         {
             var trigger = e.Trigger.ToLower().Trim();

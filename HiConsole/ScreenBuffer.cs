@@ -1,40 +1,107 @@
 ﻿using System.Text;
 
 namespace MrHihi.HiConsole;
+public static class HiExtensions
+{
+    public static bool IsCJK(this char c)
+    {
+        return (c >= '\u4E00' && c <= '\u9FFF') ||  // 基本漢字
+                (c >= '\u3400' && c <= '\u4DBF');
+    }
+    public static int CJKLength(this string s)
+    {
+        return s.Sum(c => c.IsCJK() ? 2 : 1);
+    }
+    public static string LastLine(this StringBuilder sb)
+    {
+        if (sb.Length == 0) return string.Empty;
+        var lastLine = new StringBuilder();
+        for (int i = sb.Length - 1; i >= 0; i--)
+        {
+            if (sb[i] == '\n') break;
+            lastLine.Insert(0, sb[i]);
+        }
+        return lastLine.ToString();
+    }
+    public static void RemoveLastLine(this StringBuilder sb)
+    {
+        while (sb.Length > 0 && sb[sb.Length - 1] != '\n')
+        {
+            sb.Remove(sb.Length - 1, 1);
+        }
+    }
+    public static void RemoveLastChar(this StringBuilder sb)
+    {
+        if (sb.Length > 0)
+        {
+            sb.Remove(sb.Length - 1, 1);
+        }
+    }
+    public static bool IsEmpty(this StringBuilder sb)
+    {
+        return sb.Length == 0;
+    }
+    public static bool IsEmpty(this string s)
+    {
+        return s.Length == 0;
+    }
+    public static string Repeat(this string s, int count)
+    {
+        return new StringBuilder().Insert(0, s, count).ToString();
+    }
+}
 public class ScreenBuffer
 {
     private StringBuilder _buffer = new StringBuilder();
     private StringBuilder _inputLine = new StringBuilder();
-    private static bool isCKJ(char c)
+    private string _promptString = ">";
+    private string _welcomeString = "Welcome to HiConsole!";
+
+    private int promptLength => _promptString.Length;
+    public void SetPrompt(string prompt, string welcome)
     {
-        return (c >= '\u4E00' && c <= '\u9FFF') ||  // 基本漢字
-                (c >= '\u3400' && c <= '\u4DBF');
+        _promptString = prompt;
+        _welcomeString = welcome;
+    }
+
+    public void WritePrompt()
+    {
+        Console.Write(_promptString);
+    }
+
+    public void WriteWelcome()
+    {
+        Console.WriteLine();
+        Console.WriteLine(_welcomeString);
     }
 
     /// <summary>
     /// Returns true if the input line is empty.
     /// </summary>
-    public bool InputLineIsEmpty => _inputLine.Length == 0;
+    public bool InputLineIsEmpty => _inputLine.IsEmpty();
     /// <summary>
     /// Returns true if the buffer is empty.
-    /// </summary>
-    public bool ScreenIsEmpty => _buffer.Length == 0;
+    /// </s/// ummary>
+    public bool ScreenIsEmpty => _buffer.IsEmpty();
 
     /// <summary>
     /// Erases the last line's \n character and shows the result on the console.
     /// </summary>
     /// <param name="promptLength"> Prompt string's length. </param>
-    public void EraseNewLine(int promptLength)
+    public void EraseNewLine()
     {
-        _buffer.Remove(_buffer.Length - 1, 1);
-        // 計算 textArea 最後一行的長度
-        var allLines = GetBuffer().Split('\n');
-        int lastLineLength = allLines.Last().Sum(c => isCKJ(c) ? 2 : 1) + ((allLines.Length>1)?0:promptLength);
-        _inputLine.Append(allLines.Last());
-        // 移除 textArea 最後一行
-        _buffer.Remove(_buffer.Length - allLines.Last().Length, allLines.Last().Length);
-        // 移到上一行的最後一個字
-        Console.SetCursorPosition(lastLineLength, Console.CursorTop - 1);
+        int promptLength = _promptString.CJKLength();
+        _buffer.RemoveLastChar();
+        var lastline = _buffer.LastLine();
+        int newlastlinelen = lastline.CJKLength() + promptLength + 1;
+        if (!lastline.IsEmpty())
+        {
+            _inputLine.Append(lastline);
+        }
+        _buffer.RemoveLastLine();
+        // 清掉 prompt 
+        Console.Write("\b \b".Repeat(promptLength));
+        Console.SetCursorPosition(newlastlinelen - 1, Console.CursorTop - 1);
     }
 
     /// <summary>
@@ -42,12 +109,105 @@ public class ScreenBuffer
     /// </summary>
     public void EraseLastChar()
     {
-        if (isCKJ(_inputLine[_inputLine.Length - 1]))
+        if ((_inputLine[_inputLine.Length - 1]).IsCJK())
         {
             Console.Write("\b \b");
         }
         Console.Write("\b \b");
         _inputLine.Remove(_inputLine.Length - 1, 1);
+    }
+
+    public bool KeyProcessor(ConsoleKeyInfo key)
+    {
+        if (key.Key == ConsoleKey.Backspace)
+        {
+            if ( _inputLine.IsEmpty() ) {
+                if ( !_buffer.IsEmpty() )
+                {
+                    EraseNewLine();
+                }
+            }
+            else
+            {
+                EraseLastChar();
+            }
+            return true;
+        } else if (key.Key == ConsoleKey.UpArrow)
+            {
+                MoveUp(key);
+            }
+            else if (key.Key == ConsoleKey.DownArrow)
+            {
+                MoveDown(key);
+            }
+            else if (key.Key == ConsoleKey.LeftArrow)
+            {
+                MoveLeft(key);
+            }
+            else if (key.Key == ConsoleKey.RightArrow)
+            {
+                MoveRight(key);
+            }
+        return false;
+    }
+
+    public void MoveUp(ConsoleKeyInfo key)
+    {
+
+    }
+    public void MoveDown(ConsoleKeyInfo key)
+    {
+
+    }
+    public void MoveLeft(ConsoleKeyInfo key)
+    {
+        if (Console.CursorLeft == 0) return;
+        if (_inputLine.IsEmpty()) return;
+        int promptLength = _promptString.CJKLength();
+        if (Console.CursorLeft <= promptLength) return;
+        var lstword = _inputLine[_inputLine.Length - 1];
+        var moveCnt = lstword.IsCJK() ? 2 : 1;
+        if (Console.CursorLeft >= moveCnt)
+        {
+            Console.SetCursorPosition(Console.CursorLeft - moveCnt, Console.CursorTop);
+        }
+    }
+    public void MoveRight(ConsoleKeyInfo key)
+    {
+        if (_inputLine.IsEmpty()) return;
+        if (Console.CursorLeft >= Console.BufferWidth) return;
+        var lstline = _inputLine.LastLine();
+        var len = lstline.CJKLength();
+        if (Console.CursorLeft >= len + _promptString.CJKLength() ) return;
+
+        Console.SetCursorPosition(Console.CursorLeft + 1, Console.CursorTop);
+
+    }
+    public Encoding OutputEncoding
+    { 
+        get { return Console.OutputEncoding; }
+        set { Console.OutputEncoding = value; }
+    }
+    public int CursorLeft => Console.CursorLeft;
+    public int CursorTop => Console.CursorTop;
+
+    public ConsoleKeyInfo ReadKey(bool intercept)
+    {
+        return Console.ReadKey(intercept);
+    }
+
+    public void WriteLine(string text = "")
+    {
+        Console.WriteLine(text);
+    }
+    public void Write(string text = "")
+    {
+        Console.Write(text);
+    }
+
+    public void SetCursorPosition(int left, int top)
+    {
+        Console.SetCursorPosition(left, top);
     }
 
     /// <summary>

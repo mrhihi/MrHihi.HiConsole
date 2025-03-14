@@ -18,6 +18,12 @@ public class CommandPrompt
         _mode = mode;
     }
 
+    /// <summary>
+    /// only works when the mode is MultiLineCommand or Hybrid
+    /// </summary>
+    /// <value>true: allow empty line / false: disallow empty line</value>
+    public bool AllowEmptyLine { get; set; } = true;
+
     public class BeforeCommandEnterArgs : EventArgs
     {
         public string Buffer { get; set; } = string.Empty;
@@ -59,28 +65,13 @@ public class CommandPrompt
     }
 
     /// <summary>
-    /// Writes the prompt text into the console.
-    /// </summary>
-    public void WritePrompt()
-    {
-        Console.Write(_promptString);
-    }
-    /// <summary>
-    /// Writes the welcome text into the console.
-    /// </summary>
-    public void WriteWelcome()
-    {
-        Console.WriteLine(_welcomeString);
-    }
-    /// <summary>
     /// Sets the text into the console.(buffer and input line will be reset)
     /// </summary>
     /// <param name="text"></param>
     public void SetText(string text)
     {
-        Console.WriteLine();
-        WriteWelcome();
-        WritePrompt();
+        _screen.WriteWelcome();
+        _screen.WritePrompt();
         _screen.SetText(text);
     }
     private void sendCommand(string text, CommandEnterArgs e)
@@ -88,31 +79,21 @@ public class CommandPrompt
         var t = text.TrimEnd('\n');
         _consoleHistory.Add(t);
         e.Command = t;
-        Console.WriteLine();
+        _screen.WriteLine();
         OnCommandEnter(e);
-        WritePrompt();
+        _screen.WritePrompt();
     }
     private void debug(string text)
     {
         // 先紀錄 Console 的位置
-        int left = Console.CursorLeft;
-        int top = Console.CursorTop;
+        int left = _screen.CursorLeft;
+        int top = _screen.CursorTop;
 
         // 移到第一行的最後面
-        Console.SetCursorPosition(0, 0);
-        Console.Write(text);
+        _screen.SetCursorPosition(0, 0);
+        _screen.Write(text);
         // 移回原本的位置
-        Console.SetCursorPosition(left, top);
-    }
-
-    /// <summary>
-    /// Returns true if the key is we want to reset the current input.
-    /// </summary>
-    /// <param name="key"></param>
-    /// <returns></returns>
-    protected virtual bool IsResetCurrentInput(ConsoleKeyInfo key)
-    {
-        return key.Key == ConsoleKey.E && key.Modifiers == ConsoleModifiers.Control;
+        _screen.SetCursorPosition(left, top);
     }
 
     /// <summary>
@@ -124,18 +105,6 @@ public class CommandPrompt
     {
         return key.Key == ConsoleKey.D && key.Modifiers == ConsoleModifiers.Control;
     }
-    /// <summary>
-    /// Returns true if the key is we want to start a new line.
-    /// </summary>
-    /// <param name="key"></param>
-    /// <returns></returns>
-    protected virtual bool IsNewLine(ConsoleKeyInfo key)
-    {
-        return key.Key == ConsoleKey.DownArrow || key.Key == ConsoleKey.RightArrow;
-    }
-
-    private string _welcomeString = string.Empty;
-    private string _promptString = string.Empty;
 
     /// <summary>
     /// Starts the console prompt.
@@ -144,58 +113,42 @@ public class CommandPrompt
     /// <param name="prompt"> Prompt message. </param>
     public void Start(string welcome, string prompt)
     {
-        _welcomeString = welcome;
-        _promptString = prompt;
-        Console.OutputEncoding = Encoding.UTF8;
+        _screen.SetPrompt(prompt, welcome);
+        _screen.OutputEncoding = Encoding.UTF8;
         ConsoleKeyInfo key;
 
-        WriteWelcome();
-        WritePrompt();
+        _screen.WriteWelcome();
+        _screen.WritePrompt();
         while (true)
         {
-            key = Console.ReadKey(true);
+            key = _screen.ReadKey(true);
 
             var kpe = new KeyPressArgs();
             kpe.Key = key;
             OnKeyPress(kpe);
             if (!kpe.Continue) continue;
 
-            if (key.Key == ConsoleKey.Backspace)
+            if (_screen.KeyProcessor(key))
             {
-                if ( _screen.InputLineIsEmpty ) {
-                    if ( !_screen.ScreenIsEmpty )
-                    {
-                        _screen.EraseNewLine(_promptString.Length);
-                    }
-                    continue;
-                }
-                else
-                {
-                    _screen.EraseLastChar();
-                }
-            }
-            else if (IsResetCurrentInput(key))
-            {
-                _screen.Reset();
-                Console.WriteLine();
-                WritePrompt();
                 continue;
             }
             else if (IsStopeInput(key))
             {
                 break;
             }
-            else if (IsNewLine(key))
-            {
-                if (_mode != enumChatMode.Hybrid) continue;
-                _screen.NewLine();
-            }
             else if (key.Key == ConsoleKey.Enter)
             {
                 if (_screen.InputLineIsEmpty) // 最後一行是空的時，按下 Enter 後檢查是否要送出
                 {
-                    if (_screen.ScreenIsEmpty) continue;
-
+                    if (_screen.ScreenIsEmpty)
+                    {
+                        if (AllowEmptyLine && _mode != enumChatMode.OneLineCommand)
+                        {
+                            _screen.NewLine();
+                            _screen.WritePrompt();
+                        }
+                        continue;
+                    }
                     var be = new BeforeCommandEnterArgs();
                     be.TriggerSend = true;
                     OnBeforeCommandEnter(be);
@@ -205,6 +158,14 @@ public class CommandPrompt
                         sendCommand(_screen.GetTextAndReset(), e);
                         if (e.Continue) continue;
                         break;
+                    }
+                    else
+                    {
+                        if (AllowEmptyLine && _mode != enumChatMode.OneLineCommand)
+                        {
+                            _screen.NewLine();
+                            _screen.WritePrompt();
+                        }
                     }
                 }
                 else
@@ -232,6 +193,7 @@ public class CommandPrompt
                             }
                         }
                         _screen.NewLine();
+                        _screen.WritePrompt();
                     }
                 }
             }
