@@ -23,8 +23,8 @@ public static class HiExtensions
         if (sb.Length == 0) return 0;
         return sb.ToString().CJKLength();
     }
-    public static bool IsIn(this ConsoleKeyInfo keyInfo, params ConsoleKey[] keys)
+    public static string Repeat(this char c, int times)
     {
-        return keys.Any(k => k == keyInfo.Key);
+        return new string(c, times);
     }
 }

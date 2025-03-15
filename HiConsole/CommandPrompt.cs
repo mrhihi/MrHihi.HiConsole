@@ -23,6 +23,7 @@ public class CommandPrompt
     public void WriteWelcome()
     {
        Console.WriteLine(_welcome);
+       Console.WriteLine();
     }
     private void writeResult(Action print)
     {
@@ -117,7 +118,10 @@ public class CommandPrompt
         }
         return false;
     }
-
+    public void MessageLoop()
+    {
+        _textArea.Loop();
+    }
     /// <summary>
     /// Starts the console prompt.
     /// </summary>
@@ -166,6 +170,11 @@ public class CommandPrompt
             else
             {
                 _textArea.Insert(keyInfo.KeyChar);
+            }
+            if (!Console.KeyAvailable)
+            {
+                MessageLoop();
+                continue;
             }
         }
     }

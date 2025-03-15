@@ -11,26 +11,25 @@ public class TextAreaCoordinate
     private readonly List<StringBuilder> _lines;
     private int _origX;
     private int _origY;
-    private int currLineIndex => Y_ABS - _origY;
-    private StringBuilder line => _lines[currLineIndex];
-    private StringBuilder prevLine => _lines[currLineIndex - 1];
-    private StringBuilder nextLine => _lines[currLineIndex + 1];
+    private int cursorLineIdx => Y_ABS - _origY;
+    private StringBuilder line => _lines[cursorLineIdx];
+    private StringBuilder prevLine => _lines[cursorLineIdx - 1];
+    private StringBuilder nextLine => _lines[cursorLineIdx + 1];
     private bool isTop => Y_ABS <= _origY;
     private bool isBottom => Y_ABS >= (_origY + _lines.Count - 1);
     private bool isStartOfLine => X_ABS <= _origX;
     private bool isEndOfLine => X_REL >= line.Length;
     private bool hasMoreLines => Y_ABS < (_origY + _lines.Count - 1);
     private readonly Dictionary<ConsoleKey, Action> _keyActions;
+    private int scrollingRows = 0;
     public bool IsInputLineEmpty => line.Length == 0;
     public bool IsAboveLineEmpty => _lines.Count == 1;
     public bool IsAtEnd => isBottom && isEndOfLine;
-    public string AboveLine => (_lines.Count > 1) ? _lines[_lines.Count - 2].ToString().TrimEnd('\n') : string.Empty;
+    public string AboveLine => (_lines.Count > 1) ? string.Join('\n', _lines.Take(_lines.Count - 1)).TrimEnd('\n') : string.Empty;
     public string AllLine => string.Join('\n', _lines).TrimEnd('\n');
     public string LastLine => _lines.Last().ToString().TrimEnd('\n');
 
-    public TextAreaCoordinate(): this(Console.CursorLeft, Console.CursorTop)
-    {
-    }
+    public TextAreaCoordinate(): this(Console.CursorLeft, Console.CursorTop) {}
     public TextAreaCoordinate(int x, int y)
     {
         _lines = new List<StringBuilder> { new StringBuilder() };
@@ -46,6 +45,7 @@ public class TextAreaCoordinate
             { ConsoleKey.Delete, Delete }
         };
     }
+
     public void Reset()
     {
         _lines.Clear();
@@ -71,7 +71,7 @@ public class TextAreaCoordinate
             Y_ABS--;
             X_ABS = line.Length + _origX;
         }
-        DrawCursor();
+        drawCursor();
     }
     public void MoveRight()
     {
@@ -84,58 +84,80 @@ public class TextAreaCoordinate
             Y_ABS++;
             X_ABS = _origX;
         }
-        DrawCursor();
+        drawCursor();
     }
     public void MoveUp()
     {
         if (!isTop)
         {
+            bool mv = tryRollingUp();
             Y_ABS--;
             X_ABS = Math.Min(X_ABS, line.Length + _origX);
-            DrawCursor();
+            drawCursor();
         }
     }
     public void MoveDown()
     {
         if (!isBottom)
         {
+            tryRollingDown();
             Y_ABS++;
             X_ABS = Math.Min(X_ABS, line.Length + _origX);
-            DrawCursor();
+            drawCursor();
         }
     }
     public void RedrawLine(int lineIdx)
     {
-        Console.SetCursorPosition(_origX, Y_ABS + lineIdx - currLineIndex);
+        Console.SetCursorPosition(_origX, Y_ABS + lineIdx - cursorLineIdx);
+        Console.CursorVisible = false;
         if (lineIdx < _lines.Count)
         {
-            Console.Write(_lines[lineIdx]);
-            for(int j = _lines[lineIdx].CJKLength() - 1; j < WindowWidth; j++)
-            {
-                Console.Write(' ');
-            }
+            int times = WindowWidth - _lines[lineIdx].CJKLength();
+            Console.Write(_lines[lineIdx] + ' '.Repeat(times));
         }
         else
         {
-            Console.Write(new string(' ', WindowWidth));
+            Console.Write(' '.Repeat(WindowWidth));
         }
     }
     public void RedrawToEnd(int addition = 0)
     {
-        for (int i = currLineIndex; i <= _lines.Count + addition; i++)
+        for (int i = cursorLineIdx; i <= _lines.Count + addition; i++)
         {
             RedrawLine(i);
         }
+        Console.CursorVisible = true;
+    }
+    public void RedrawLine2(int lineIdx)
+    {
+        Console.SetCursorPosition(_origX, _origY + lineIdx);
+        Console.CursorVisible = false;
+        var l = _lines[Math.Min(_lines.Count - 1, lineIdx + scrollingRows)];
+        int times = WindowWidth - l.CJKLength();
+        Console.Write(l + ' '.Repeat(times));
+    }
+    public void RedrawAll()
+    {
+        var end = Math.Min(_lines.Count, Console.WindowHeight - _origY);
+        for (int i = 0; i < end; i++)
+        {
+            RedrawLine2(i);
+        }
+        Console.CursorVisible = true;
     }
     public void NewLine()
     {
+        bool ib = isBottom;
         string remaining = line.ToString(X_REL, line.Length - X_REL);
         line.Remove(X_REL, line.Length - X_REL);
-        _lines.Insert(currLineIndex + 1, new StringBuilder(remaining));
-        RedrawToEnd();
+        _lines.Insert(cursorLineIdx + 1, new StringBuilder(remaining));
+        if (!tryRollingDown())
+        {
+            RedrawToEnd();
+        }
         Y_ABS++;
         X_ABS = _origX;
-        DrawCursor();
+        drawCursor();
     }
     public void Backspace()
     {
@@ -143,43 +165,125 @@ public class TextAreaCoordinate
         {
             line.Remove(X_REL - 1, 1);
             X_ABS--;
-            RedrawLine(currLineIndex);
+            RedrawLine(cursorLineIdx);
+            Console.CursorVisible = true;
         }
         else if (!isTop)
         {
+            var norolling = !tryRollingUp();
             // 合併到上一行
             X_ABS = prevLine.Length + _origX;
             prevLine.Append(line.ToString());
-            _lines.RemoveAt(currLineIndex);
+            _lines.RemoveAt(cursorLineIdx);
             Y_ABS--;
-            RedrawToEnd(1);
+            if (norolling)
+            {
+                RedrawToEnd(1);
+            }
         }
-        DrawCursor();
+        drawCursor();
     }
     public void Delete()
     {
         if (!isEndOfLine)
         {
             line.Remove(X_REL, 1);
-            RedrawLine(currLineIndex);
+            RedrawLine(cursorLineIdx);
+            Console.CursorVisible = true;
         }
         else if (hasMoreLines)
         {
             // 合併下一行
             line.Append(nextLine.ToString());
-            _lines.RemoveAt(currLineIndex + 1);
+            _lines.RemoveAt(cursorLineIdx + 1);
             RedrawToEnd(1);
         }
-        DrawCursor();
+        drawCursor();
     }
     public void Insert(char c)
     {
         line.Insert(X_REL, c);
         X_ABS++;
-        Console.Write(c);
+        if (isEndOfLine)
+        {
+            Console.Write(c);
+        }
+        else
+        {
+            RedrawLine(cursorLineIdx);
+            Console.CursorVisible = true;
+            drawCursor();
+        }
     }
-    public void DrawCursor()
+    private void drawCursor()
     {
         Console.SetCursorPosition(X_CJK, Y_ABS);
     }
+
+    public void PrintInfo(string s)
+    {
+        // var x = Console.WindowWidth - s.Length - 1;
+        Print(s, 0, _origY - 1);
+    }
+
+    public void Print(string s, int px = 0, int py = 0)
+    {
+        var x = Console.CursorLeft;
+        var y = Console.CursorTop;
+        Console.CursorVisible = false;
+        Console.SetCursorPosition(px, py);
+        Console.Write(' '.Repeat(Console.WindowWidth - py));
+        Console.SetCursorPosition(px, py);
+        Console.Write(s);
+        Console.SetCursorPosition(x, y);
+        Console.CursorVisible = true;
+    }
+    public void Loop()
+    {
+        PrintInfo($"L:{cursorLineIdx} C:{X_REL}");
+        // debugDraw($"X_ABS: {X_ABS}, Y_ABS: {Y_ABS}, " +
+        //                 $"_origX: {_origX}, _origY: {_origY}, " +
+        //                 $"W/SW: {Console.WindowHeight}/{scrollingRows}, " +
+        //                 $"cli: {cursorLineIdx}, " +
+        //                 $"lcnt: {_lines.Count}, "
+
+        // , py: 0);
+        // debugDraw($"isBottom:{isBottom}, scrollingRows:{scrollingRows}", py: 1);
+    }
+
+    private bool tryRollingUp()
+    {
+        var rolling = calcScrollingRows(-1);
+        if (rolling)
+        {
+            RedrawAll();
+        }
+        return rolling;
+    }
+
+    private bool tryRollingDown()
+    {
+        var rolling = calcScrollingRows(1);
+        if (rolling)
+        {
+            RedrawAll();
+        }
+        return rolling;
+    }
+
+    private bool calcScrollingRows(int predict = 0)
+    {
+        int origRollingRows = scrollingRows;
+        // 當游標超過視窗底部時，計算需要滾動的行數
+        if (Y_ABS + predict >= Console.WindowHeight)
+        {
+            scrollingRows = Y_ABS + predict - Console.WindowHeight + 1;
+        }
+        else
+        {
+            scrollingRows = 0;
+        }
+        return origRollingRows != scrollingRows;
+    }
+
 }
