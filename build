@@ -1,0 +1,8 @@
+#!/bin/zsh
+
+rm -rf *.nupkg
+rm -rf bin
+rm -rf obj
+
+dotnet build
+dotnet pack

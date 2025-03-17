@@ -1,0 +1,57 @@
+#!/bin/zsh
+
+source=$1
+
+# 檢查輸入的第一個參數是否為 local 或 github，如果不是則提示錯誤
+if [ "$source" != "local" ] && [ "$source" != "github" ]; then
+    echo "The first argument must be 'local' or 'github'."
+    exit 1
+fi
+
+nupkg=$2
+nupkg_path="./HiConsole/bin/Release"
+nupkg_file="$nupkg_path/$2"
+cmd="ls $nupkg_path/*.nupkg | xargs -n 1 basename"
+
+# 檢查輸入的第二個參數是否為空，或者不存在指定的檔案則提示錯誤
+if [[ -z "$nupkg" ]]; then
+    echo ""
+    echo "The second argument must be a valid file."
+    echo ""
+    eval $cmd
+    exit 1
+fi
+
+if [[ ! -e "$nupkg_file" ]]; then
+    echo ""
+    echo "The second argument must be a valid file."
+    echo ""
+    eval $cmd
+    exit 1
+fi
+
+# 把 nuget 檔案切成檔名跟版本號
+if [[ $nupkg =~ "(.*)\.([0-9]+\.[0-9]+\.[0-9]+)\.nupkg" ]]; then
+    nupkg_name=$match[1]
+    nupkg_version=$match[2]
+fi
+
+echo "nupkg_name: $nupkg_name"
+echo "nupkg_version: $nupkg_version"
+
+# 如果第一個參數為 local，則執行本地推送
+if [[ "$source" == "local" ]]; then
+    echo "Deleting exists $nupkg_file..."
+    dotnet nuget delete $nupkg_name $nupkg_version -s "mrhihi.nuget"
+    echo "Pushing $nupkg_file to local repository..."
+    dotnet nuget push $nupkg_file --source "mrhihi.nuget" --skip-duplicate
+    dotnet nuget locals all --clear
+    exit 0
+fi
+
+# 如果第一個參數為 github，則執行 GitHub 推送
+if [[ "$source" == "github" ]]; then
+    echo "Pushing $nupkg_file to GitHub repository..."
+    dotnet nuget push $nupkg_file --api-key <YOUR KEY> --source https://api.nuget.org/v3/index.json --skip-duplicate
+    exit 0
+fi

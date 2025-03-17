@@ -3,6 +3,22 @@
 namespace MrHihi.HiConsole;
 public class TextAreaCoordinate
 {
+    public event EventHandler<CommandTouchArgs>? CommandInput_TouchTop;
+    protected virtual void OnCommandInput_TouchTop(CommandTouchArgs e)
+    {
+        CommandInput_TouchTop?.Invoke(this, e);
+    }
+    public event EventHandler<CommandTouchArgs>? CommandInput_TouchBottom;
+    protected virtual void OnCommandInput_TouchBottom(CommandTouchArgs e)
+    {
+        CommandInput_TouchBottom?.Invoke(this, e);
+    }
+    public event EventHandler<PrintInfoArgs>? Console_PrintInfo;
+    protected virtual void OnConsole_PrintInfo(PrintInfoArgs e)
+    {
+        Console_PrintInfo?.Invoke(this, e);
+    }
+
     public int X_CJK => line.ToString(0, X_REL).CJKLength() + _origX;
     public int X_REL => X_ABS - _origX;
     public int X_ABS { get; set; }
@@ -46,6 +62,14 @@ public class TextAreaCoordinate
         };
     }
 
+    public void SetInput(string s)
+    {
+        line.Clear();
+        line.Append(s);
+        ReDrawLine(cursorLineIdx);
+        X_ABS = _origX + line.CJKLength();
+    }
+
     public void Reset()
     {
         _lines.Clear();
@@ -53,6 +77,7 @@ public class TextAreaCoordinate
         X_ABS = _origX = Console.CursorLeft;
         Y_ABS = _origY = Console.CursorTop;
     }
+
     public bool ProcessKey(ConsoleKeyInfo keyInfo)
     {
         if (!_keyActions.ContainsKey(keyInfo.Key)) return false;
@@ -88,7 +113,17 @@ public class TextAreaCoordinate
     }
     public void MoveUp()
     {
-        if (!isTop)
+        if (isTop)
+        {
+            var e = new CommandTouchArgs();
+            OnCommandInput_TouchTop(e);
+            if (e.Setting)
+            {
+                SetInput(e.Command);
+                drawCursor();
+            }
+        }
+        else
         {
             bool mv = tryRollingUp();
             Y_ABS--;
@@ -98,7 +133,17 @@ public class TextAreaCoordinate
     }
     public void MoveDown()
     {
-        if (!isBottom)
+        if (isBottom)
+        {
+            var e = new CommandTouchArgs();
+            OnCommandInput_TouchBottom(e);
+            if (e.Setting)
+            {
+                SetInput(e.Command);
+                drawCursor();
+            }
+        }
+        else
         {
             tryRollingDown();
             Y_ABS++;
@@ -106,7 +151,7 @@ public class TextAreaCoordinate
             drawCursor();
         }
     }
-    public void RedrawLine(int lineIdx)
+    public void ReDrawLine(int lineIdx)
     {
         Console.SetCursorPosition(_origX, Y_ABS + lineIdx - cursorLineIdx);
         Console.CursorVisible = false;
@@ -124,7 +169,7 @@ public class TextAreaCoordinate
     {
         for (int i = cursorLineIdx; i <= _lines.Count + addition; i++)
         {
-            RedrawLine(i);
+            ReDrawLine(i);
         }
         Console.CursorVisible = true;
     }
@@ -165,7 +210,7 @@ public class TextAreaCoordinate
         {
             line.Remove(X_REL - 1, 1);
             X_ABS--;
-            RedrawLine(cursorLineIdx);
+            ReDrawLine(cursorLineIdx);
             Console.CursorVisible = true;
         }
         else if (!isTop)
@@ -188,7 +233,7 @@ public class TextAreaCoordinate
         if (!isEndOfLine)
         {
             line.Remove(X_REL, 1);
-            RedrawLine(cursorLineIdx);
+            ReDrawLine(cursorLineIdx);
             Console.CursorVisible = true;
         }
         else if (hasMoreLines)
@@ -210,7 +255,7 @@ public class TextAreaCoordinate
         }
         else
         {
-            RedrawLine(cursorLineIdx);
+            ReDrawLine(cursorLineIdx);
             Console.CursorVisible = true;
             drawCursor();
         }
@@ -222,8 +267,12 @@ public class TextAreaCoordinate
 
     public void PrintInfo(string s)
     {
-        // var x = Console.WindowWidth - s.Length - 1;
-        Print(s, 0, _origY - 1);
+        var e = new PrintInfoArgs { Info = s };
+        OnConsole_PrintInfo(e);
+        if (!e.Cancel)
+        {
+            Print(e.Info, 0, _origY - 1);
+        }
     }
 
     public void Print(string s, int px = 0, int py = 0)

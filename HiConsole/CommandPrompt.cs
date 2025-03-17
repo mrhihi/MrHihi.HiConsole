@@ -15,6 +15,9 @@ public class CommandPrompt
         WriteWelcome();
         WritePrompt();
         _textArea = new TextAreaCoordinate();
+        _textArea.CommandInput_TouchTop += (sender, e) => OnCommandInput_TouchTop(e);
+        _textArea.CommandInput_TouchBottom += (sender, e) => OnCommandInput_TouchBottom(e);
+        _textArea.Console_PrintInfo += (sender, e)=> OnConsole_PrintInfo(e);
     }
     public void WritePrompt()
     {
@@ -39,14 +42,22 @@ public class CommandPrompt
         _mode = mode;
     }
 
-    public class EnterPressArgs : EventArgs
+    public event EventHandler<CommandTouchArgs>? CommandInput_TouchTop;
+    protected virtual void OnCommandInput_TouchTop(CommandTouchArgs e)
     {
-        public required Action<Action> WriteResult { get; set; }
-        public string Command { get; set; } = string.Empty;
-        public string Buffer { get; set; } = string.Empty;
-        public bool Triggered { get; set; } = false;
-        public bool Cancel { get; set; } = false;
+        CommandInput_TouchTop?.Invoke(this, e);
     }
+    public event EventHandler<CommandTouchArgs>? CommandInput_TouchBottom;
+    protected virtual void OnCommandInput_TouchBottom(CommandTouchArgs e)
+    {
+        CommandInput_TouchBottom?.Invoke(this, e);
+    }
+    public event EventHandler<PrintInfoArgs>? Console_PrintInfo;
+    protected virtual void OnConsole_PrintInfo(PrintInfoArgs e)
+    {
+        Console_PrintInfo?.Invoke(this, e);
+    }
+
     public event EventHandler<EnterPressArgs>? MultiLineCommand_EnterPress;
 
     protected virtual void OnMultiLineCommand_EnterPress(EnterPressArgs e)
@@ -60,20 +71,6 @@ public class CommandPrompt
         OneLineCommand_EnterPress?.Invoke(this, e);
     }
 
-    public class KeyPressArgs : EventArgs
-    {
-        public ConsoleKeyInfo Key { get; set; }
-        /// <summary>
-        /// Set to true: Bypass onetime key process.
-        /// </summary>
-        /// <value></value>
-        public bool Processed { get; set; } = false;
-        /// <summary>
-        /// Set to true: Stope waitting key read.
-        /// </summary>
-        /// <value></value>
-        public bool Cancel { get; set; } = false;
-    }
     public event EventHandler<KeyPressArgs>? KeyPress;
     
     protected void OnKeyPress(KeyPressArgs e)
