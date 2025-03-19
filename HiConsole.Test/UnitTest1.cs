@@ -78,4 +78,19 @@ public class UnitTest1
         };
         commandPrompt.Start();
     }
+
+    [Fact]
+    public void TestDrawTable()
+    {
+        var content = new List<dynamic>
+        {
+            new Dictionary<string, object> { 
+                { "Name", "MrHihi" }, { "Age", 18 },
+            },
+            new Dictionary<string, object> { 
+                { "Name", "MrHihi" }, { "Age", 18 }
+            }
+        };
+        MrHihi.HiConsole.Text.ConsoleTable.Print(content);
+    }
 }

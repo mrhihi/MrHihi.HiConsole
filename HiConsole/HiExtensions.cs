@@ -25,6 +25,7 @@ public static class HiExtensions
     }
     public static string Repeat(this char c, int times)
     {
+        if (times <= 0) return string.Empty;
         return new string(c, times);
     }
 }
