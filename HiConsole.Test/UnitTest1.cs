@@ -85,12 +85,12 @@ public class UnitTest1
         var content = new List<dynamic>
         {
             new Dictionary<string, object> { 
-                { "Name", "MrHihi" }, { "Age", 18 },
+                { "Name", "MrHihi 中文搞1笑" }, { "Age", 18 }, { "Time", DateTime.Now },
             },
             new Dictionary<string, object> { 
-                { "Name", "MrHihi" }, { "Age", 18 }
+                { "Name", "MrHihi" }, { "Age", 18 }, { "Time", DateTime.Now }
             }
         };
-        MrHihi.HiConsole.Text.ConsoleTable.Print(content);
+        Draw.ConsoleTable.Print(content);
     }
 }

@@ -1,4 +1,4 @@
-﻿namespace MrHihi.HiConsole.Text;
+﻿namespace MrHihi.HiConsole.Draw;
 public class ConsoleTableEnums
 {
     public enum Format

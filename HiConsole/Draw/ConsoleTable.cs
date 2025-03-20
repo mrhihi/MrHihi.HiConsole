@@ -7,7 +7,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace MrHihi.HiConsole.Text;
+namespace MrHihi.HiConsole.Draw;
 public class ConsoleTable
 {
     static class Symbol
@@ -17,7 +17,7 @@ public class ConsoleTable
     }
 
     public IList<object> Columns { get; }
-    public IList<object[]> Rows { get; }
+    public IList<object?[]> Rows { get; }
 
     public ConsoleTableOptions Options { get; }
     public Type[]? ColumnTypes { get; private set; }
@@ -40,7 +40,7 @@ public class ConsoleTable
     public ConsoleTable(ConsoleTableOptions options)
     {
         Options = options ?? throw new ArgumentNullException("options");
-        Rows = new List<object[]>();
+        Rows = new List<object?[]>();
         Columns = new List<object>(options.Columns);
         Formats = new List<string>();
     }
@@ -52,7 +52,7 @@ public class ConsoleTable
         return this;
     }
 
-    public ConsoleTable AddRow(params object[] values)
+    public ConsoleTable AddRow(params object?[] values)
     {
         if (values == null)
             throw new ArgumentNullException(nameof(values));
@@ -194,7 +194,7 @@ public class ConsoleTable
 
     private void SetFormats(List<int> columnLengths, List<string> columnAlignment)
     {
-        var allLines = new List<object[]>();
+        var allLines = new List<object?[]>();
         allLines.Add(Columns.ToArray());
         allLines.AddRange(Rows);
 
@@ -203,12 +203,21 @@ public class ConsoleTable
             return Enumerable.Range(0, Columns.Count)
                 .Select(i =>
                 {
-                    var value = d[i]?.ToString() ?? "";
+                    var value = _toString(d[i]);
                     var length = columnLengths[i] - (GetTextWidth(value) - value.Length);
                     return " " + Symbol.VLINE + " {" + i + "," + columnAlignment[i] + length + "}";
                 })
                 .Aggregate((s, a) => s + a) + " " + Symbol.VLINE;
         }).ToList();
+    }
+
+    private string _toString(object? value)
+    {
+        if (value is DateTime) {
+            var r = ((DateTime)value).ToString(Options.DateTimeFormat ?? "yyyy-MM-dd HH:mm:ss");
+            return r;
+        }
+        return value?.ToString() ?? "";
     }
 
     public static int GetTextWidth(string value)
@@ -264,7 +273,7 @@ public class ConsoleTable
         var columnHeaders = string.Format(Formats[0].TrimStart(), Columns.ToArray());
 
         // add each row
-        var results = Rows.Select((row, i) => string.Format(Formats[i + 1].TrimStart(), row)).ToList();
+        var results = Rows.Select((row, i) => string.Format(Formats[i + 1].TrimStart(), row.Select(x=>_toString(x)).ToArray())).ToList();
 
         // create the divider
         var divider = Regex.Replace(columnHeaders, "[^"+ Symbol.VLINE +"]", "─");
@@ -319,7 +328,7 @@ public class ConsoleTable
     private List<int> ColumnLengths()
     {
         var columnLengths = Columns
-            .Select((t, i) => Rows.Select(x => x[i])
+            .Select((t, i) => Rows.Select(x => _toString(x[i]))
                 .Union(new[] { Columns[i] })
                 .Where(x => x != null)
                 .Select(x => (x?.ToString()??"").ToCharArray().Sum(c => c > 127 ? 2 : 1)).Max())
@@ -365,20 +374,59 @@ public class ConsoleTable
         return typeof(T).GetProperties().Select(x => x.PropertyType).ToArray();
     }
 
-    public static void Print(List<dynamic> data, ConsoleTableEnums.Format format = ConsoleTableEnums.Format.Alternative)
+    public static void Print(List<List<object>> data, ConsoleTableEnums.Format format = ConsoleTableEnums.Format.Alternative, ConsoleTableOptions? options = null)
     {
-        if (data == null || !data.Any())
+        foreach (var table in data)
         {
-            return;
+            var newtable = table.Select(x => (IDictionary<string, object>)x).ToList();
+            if (newtable == null) throw new ArgumentNullException(nameof(newtable));
+            Print(newtable, format, options);
         }
-        var ct = new ConsoleTable();
-        var firstItem = data.First();
-        var headers = ((IDictionary<string, object>)firstItem).Keys.ToList();
-        ct.AddColumn(headers);
-        foreach(var item in data)
+    }
+
+    public static void Print<T>(IEnumerable<IEnumerable<T>> tables, ConsoleTableEnums.Format format = ConsoleTableEnums.Format.Alternative, ConsoleTableOptions? options = null)
+    {
+        foreach(var table in tables)
         {
-            var values = ((IDictionary<string, object>)item).Values.Select(v => v?.ToString() ?? "null").ToArray();
-            ct.AddRow(values);
+            Print(table, format, options);
+        }
+    }
+
+    public static void Print<T>(IEnumerable<T> data, ConsoleTableEnums.Format format = ConsoleTableEnums.Format.Alternative, ConsoleTableOptions? options = null)
+    {
+        var tempData = data;
+        var isDict = typeof(T).IsGenericType && (typeof(T).GetGenericTypeDefinition() == typeof(IDictionary<,>) || typeof(T).GetGenericTypeDefinition() == typeof(Dictionary<,>));
+        ConsoleTable? ct = null;
+        if (typeof(T) == typeof(object)) {
+            var firstItem = tempData.FirstOrDefault();
+            if (firstItem == null) throw new ArgumentNullException(nameof(tempData), "Data collection is empty.");
+            if (firstItem as IDictionary<string, object> != null) isDict = true;
+        }
+        if (isDict)
+        {
+            ct = new ConsoleTable(options??ConsoleTableOptions.Default);
+            var firstItem = tempData.FirstOrDefault();
+            if (firstItem == null) throw new ArgumentNullException(nameof(tempData), "Data collection is empty.");
+            var headers = ((IDictionary<string, object>)firstItem).Keys.ToList();
+            ct.AddColumn(headers);
+            foreach (var item in tempData)
+            {
+                var values = ((IDictionary<string, object>?)item)?.Values.Select(v => v).ToArray() ?? throw new ArgumentNullException(nameof(tempData), "Data collection is empty.");
+                ct.AddRow(values);
+            }
+        }
+        else
+        {
+            var props = tempData.First()?.GetType().GetProperties().ToList();
+            if (props == null) return;
+            ct = new ConsoleTable(options??ConsoleTableOptions.Default);
+            var headers = props.Select(p => p.Name).ToList();
+            ct.AddColumn(headers);
+            foreach (var item in tempData)
+            {
+                var values = props.Select(p => p.GetValue(item)).ToArray();
+                ct.AddRow(values);
+            }
         }
         ct.Configure(o => {
             o.NumberAlignment = ConsoleTableEnums.Alignment.Right;
