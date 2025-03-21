@@ -225,7 +225,7 @@ public class ConsoleTable
         if (value == null)
             return 0;
 
-        var length = value.ToCharArray().Sum(c => c > 127 ? 2 : 1);
+        var length = value.RemvoeAsciiControl().ToCharArray().Sum(c => c > 127 ? 2 : 1);
         return length;
     }
 

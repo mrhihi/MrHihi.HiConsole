@@ -7,6 +7,7 @@ public class CommandPrompt
     private readonly string _welcome;
     private readonly string _prompt;
     private enumChatMode _mode;
+    public TextAreaCoordinate TextArea => _textArea;
     public CommandPrompt(enumChatMode mode, string welcome, string prompt)
     {
         _mode = mode;
@@ -27,12 +28,6 @@ public class CommandPrompt
     {
        Console.WriteLine(_welcome);
        Console.WriteLine();
-    }
-    private void writeResult(Action print)
-    {
-        Console.WriteLine();
-        print();
-        Console.WriteLine();
     }
 
     public enumChatMode ChatMode {get { return _mode;}}
@@ -126,6 +121,7 @@ public class CommandPrompt
     /// <param name="prompt"> Prompt message. </param>
     public void Start()
     {
+        _textArea.Loop();
         while (true)
         {
             ConsoleKeyInfo keyInfo = Console.ReadKey(true);
@@ -148,8 +144,7 @@ public class CommandPrompt
                 var e = new EnterPressArgs
                 {
                     Command = _textArea.LastLine,
-                    Buffer = _textArea.AboveLine,
-                    WriteResult = writeResult
+                    Buffer = _textArea.AboveLine
                 };
                 if (IsTriggerSend(e))
                 {

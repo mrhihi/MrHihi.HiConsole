@@ -23,6 +23,24 @@ public static class HiExtensions
         if (sb.Length == 0) return 0;
         return sb.ToString().CJKLength();
     }
+    public static string CJKSubString(this StringBuilder s, int startIndex, int length)
+    {
+        if (s.Length == 0) return string.Empty;
+        if (startIndex < 0) startIndex = 0;
+        if (length <= 0) return string.Empty;
+        if (startIndex >= s.Length) return string.Empty;
+        if (startIndex + length > s.Length) length = s.Length - startIndex;
+        var sb = new StringBuilder();
+        int clen = 0;
+        for (int i = 0; i < length; i++)
+        {
+            var c = s[startIndex + i];
+            clen += c.CJKLength();
+            if (clen > length) break;
+            sb.Append(c);
+        }
+        return sb.ToString();
+    }
     public static string Repeat(this char c, int times)
     {
         if (times <= 0) return string.Empty;

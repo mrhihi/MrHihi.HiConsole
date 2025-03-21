@@ -19,7 +19,7 @@ public class TextAreaCoordinate
         Console_PrintInfo?.Invoke(this, e);
     }
 
-    public int X_CJK => line.ToString(0, X_REL).CJKLength() + _origX;
+    public int X_CJK => LineOp.Line_BeforeCursorToStr().CJKLength() + _origX;
     public int X_REL => X_ABS - _origX;
     public int X_ABS { get; set; }
     public int Y_ABS { get; set; }
@@ -44,6 +44,96 @@ public class TextAreaCoordinate
     public string AboveLine => (_lines.Count > 1) ? string.Join('\n', _lines.Take(_lines.Count - 1)).TrimEnd('\n') : string.Empty;
     public string AllLine => string.Join('\n', _lines).TrimEnd('\n');
     public string LastLine => _lines.Last().ToString().TrimEnd('\n');
+    private LineOperator LineOp => new LineOperator(this);
+
+    class LineOperator
+    {
+        private readonly TextAreaCoordinate _tac;
+        public LineOperator(TextAreaCoordinate tac)
+        {
+            _tac = tac;
+        }
+        public StringBuilder Line => _tac.line;
+        public StringBuilder PrevLine => _tac.prevLine;
+        public StringBuilder NextLine => _tac.nextLine;
+        public List<StringBuilder> Lines => _tac._lines;
+        public void Line_Insert(char c)
+        {
+            var sidx = Math.Min(_tac.line.Length, _tac.X_REL);
+            Line.Insert(sidx, c);
+        }
+        public string Line_ToString()
+        {
+            return Line.ToString();
+        }
+        public string Line_BeforeCursorToStr()
+        {
+            return Line.ToString(0, Math.Min(Line.Length, _tac.X_REL));
+        }
+        public string Line_AfterCursorToStr()
+        {
+            var s = Math.Min(Line.Length, _tac.X_REL);
+            return Line.ToString(s, Line.Length - s);
+        }
+        public string Line_Right(int c)
+        {
+            if (c <= 0) return string.Empty;
+            if (c >= Line.Length) return Line.ToString();
+            return Line.ToString(Line.Length - c, c);
+        }
+        public void Line_RemoveCursorToEnd()
+        {
+            if (_tac.X_REL >= Line.Length) return;
+            if (_tac.X_REL == 0)
+            {
+                Line.Clear();
+                return;
+            }
+            Line.Remove(_tac.X_REL, Line.Length - _tac.X_REL);
+        }
+        public void Line_RemoveCursorToCount(int count, int xadj = 0)
+        {
+            int x_rel = _tac.X_REL + xadj;
+            if (count <= 0) return;
+            var s = Math.Min(Line.Length, x_rel);
+            if (s == Line.Length) return;
+            if (count >= Line.Length - s) count = Line.Length - s;
+            Line.Remove(s, count);
+        }
+        public void Line_RemoveRight(int count)
+        {
+            if (count <= 0) return;
+            if (count >= Line.Length) Line.Clear();
+            Line.Remove(Line.Length - count, count);
+        }
+        public void Backspace_TryMergeLines()
+        {
+            // 如果上一行的空間還夠放，就直接合併到上一行
+            if (PrevLine.CJKLength() + Line.CJKLength() <= _tac.WindowWidth)
+            {
+                var norolling = !_tac.tryRollingUp();
+                _tac.X_ABS = PrevLine.Length + _tac._origX;
+                PrevLine.Append(Line_ToString());
+                Lines.RemoveAt(_tac.cursorLineIdx);
+                _tac.Y_ABS--;
+                if (norolling)
+                {
+                    _tac.RedrawToEnd(1);
+                }
+            }
+        }
+
+        public void Line_Delete_TryMergeLines()
+        {
+            // 如果這一行的空間還夠放下下一行，就直接合併到這一行
+            if (Line.CJKLength() + NextLine.CJKLength() <= _tac.WindowWidth)
+            {
+                Line.Append(NextLine.ToString());
+                Lines.RemoveAt(_tac.cursorLineIdx + 1);
+                _tac.RedrawToEnd(1);
+            }
+        }
+    }
 
     public TextAreaCoordinate(): this(Console.CursorLeft, Console.CursorTop) {}
     public TextAreaCoordinate(int x, int y)
@@ -58,11 +148,31 @@ public class TextAreaCoordinate
             { ConsoleKey.UpArrow, MoveUp },
             { ConsoleKey.DownArrow, MoveDown },
             { ConsoleKey.Backspace, Backspace },
-            { ConsoleKey.Delete, Delete }
+            { ConsoleKey.Delete, Delete },
+            { ConsoleKey.Home, MoveHome },
+            { ConsoleKey.End, MoveEnd }
         };
     }
 
-    public void SetInput(string s)
+    public void ResetLines(string s, bool cursorToEnd = false)
+    {
+        _lines.Clear();
+        s.Split('\n').ToList().ForEach(l => _lines.Add(new StringBuilder(l)));
+        if (cursorToEnd)
+        {
+            Y_ABS = _origY + _lines.Count - 1;
+            X_ABS = _origX + line.CJKLength();
+        }
+        else
+        {
+            Y_ABS = _origY;
+            X_ABS = _origX + line.CJKLength();
+        }
+        RedrawAll();
+        drawCursor();
+    }
+
+    public void SetCurrentLine(string s)
     {
         line.Clear();
         line.Append(s);
@@ -84,7 +194,22 @@ public class TextAreaCoordinate
         _keyActions[keyInfo.Key].Invoke();
         return true;
     }
-
+    public void MoveHome()
+    {
+        if (!isStartOfLine)
+        {
+            X_ABS = _origX;
+            drawCursor();
+        }
+    }
+    public void MoveEnd()
+    {
+        if (!isEndOfLine)
+        {
+            X_ABS = line.Length + _origX;
+            drawCursor();
+        }
+    }
     public void MoveLeft()
     {
         if (!isStartOfLine)
@@ -116,10 +241,12 @@ public class TextAreaCoordinate
         if (isTop)
         {
             var e = new CommandTouchArgs();
+            e.CurrBuffer = AboveLine;
+            e.CurrCommand = LastLine;
             OnCommandInput_TouchTop(e);
             if (e.Setting)
             {
-                SetInput(e.Command);
+                SetCurrentLine(e.Command);
                 drawCursor();
             }
         }
@@ -136,10 +263,12 @@ public class TextAreaCoordinate
         if (isBottom)
         {
             var e = new CommandTouchArgs();
+            e.CurrBuffer = AboveLine;
+            e.CurrCommand = LastLine;
             OnCommandInput_TouchBottom(e);
             if (e.Setting)
             {
-                SetInput(e.Command);
+                SetCurrentLine(e.Command);
                 drawCursor();
             }
         }
@@ -151,14 +280,16 @@ public class TextAreaCoordinate
             drawCursor();
         }
     }
+
     public void ReDrawLine(int lineIdx)
     {
         Console.SetCursorPosition(_origX, Y_ABS + lineIdx - cursorLineIdx);
         Console.CursorVisible = false;
         if (lineIdx < _lines.Count)
         {
-            int times = WindowWidth - _lines[lineIdx].CJKLength();
-            Console.Write(_lines[lineIdx] + ' '.Repeat(times));
+            var s = _lines[lineIdx];
+            int times = WindowWidth - s.CJKLength();
+            Console.Write(s + ' '.Repeat(times));
         }
         else
         {
@@ -193,8 +324,8 @@ public class TextAreaCoordinate
     public void NewLine()
     {
         bool ib = isBottom;
-        string remaining = line.ToString(X_REL, line.Length - X_REL);
-        line.Remove(X_REL, line.Length - X_REL);
+        string remaining = LineOp.Line_AfterCursorToStr();
+        LineOp.Line_RemoveCursorToEnd();
         _lines.Insert(cursorLineIdx + 1, new StringBuilder(remaining));
         if (!tryRollingDown())
         {
@@ -208,23 +339,15 @@ public class TextAreaCoordinate
     {
         if (!isStartOfLine)
         {
-            line.Remove(X_REL - 1, 1);
+            LineOp.Line_RemoveCursorToCount(1, -1);
             X_ABS--;
             ReDrawLine(cursorLineIdx);
             Console.CursorVisible = true;
         }
         else if (!isTop)
         {
-            var norolling = !tryRollingUp();
-            // 合併到上一行
-            X_ABS = prevLine.Length + _origX;
-            prevLine.Append(line.ToString());
-            _lines.RemoveAt(cursorLineIdx);
-            Y_ABS--;
-            if (norolling)
-            {
-                RedrawToEnd(1);
-            }
+            LineOp.Backspace_TryMergeLines();
+
         }
         drawCursor();
     }
@@ -232,23 +355,54 @@ public class TextAreaCoordinate
     {
         if (!isEndOfLine)
         {
-            line.Remove(X_REL, 1);
+            LineOp.Line_RemoveCursorToCount(1);
             ReDrawLine(cursorLineIdx);
             Console.CursorVisible = true;
         }
         else if (hasMoreLines)
         {
-            // 合併下一行
-            line.Append(nextLine.ToString());
-            _lines.RemoveAt(cursorLineIdx + 1);
-            RedrawToEnd(1);
+            LineOp.Line_Delete_TryMergeLines();
         }
         drawCursor();
     }
+
     public void Insert(char c)
     {
-        line.Insert(X_REL, c);
+        if (line.CJKLength() + c.CJKLength() > WindowWidth)
+        {
+            if (isEndOfLine)
+            {
+                NewLine();
+                line.Append(c);
+                X_ABS++;
+                Console.Write(c);
+            }
+            else
+            {
+                LineOp.Line_Insert(c);
+                X_ABS++;
+                var cl = c.CJKLength();
+                var remaining = LineOp.Line_Right(cl);
+                LineOp.Line_RemoveRight(cl);
+                if (hasMoreLines && (_lines[cursorLineIdx + 1].CJKLength() + cl) <= WindowWidth)
+                {
+                    _lines[cursorLineIdx + 1].Append(remaining);
+                }
+                else
+                {
+                    _lines.Insert(cursorLineIdx + 1, new StringBuilder(remaining));
+                }
+                var y = Y_ABS;
+                RedrawAll();
+                Y_ABS = y;
+                drawCursor();
+            }
+            return;
+        }
+        // 在游標所在位置插入字元
+        LineOp.Line_Insert(c);
         X_ABS++;
+        // 如果游標在行為，就直接寫出來，不然就要把游標後面的字都重寫一次
         if (isEndOfLine)
         {
             Console.Write(c);
