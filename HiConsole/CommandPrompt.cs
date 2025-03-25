@@ -161,7 +161,7 @@ public class CommandPrompt
             }
             else
             {
-                _textArea.Insert(keyInfo.KeyChar);
+                _textArea.InsertAsync(keyInfo.KeyChar).Wait();
             }
             if (!Console.KeyAvailable)
             {

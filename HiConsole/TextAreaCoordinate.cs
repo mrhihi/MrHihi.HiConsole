@@ -366,53 +366,55 @@ public class TextAreaCoordinate
         drawCursor();
     }
 
-    public void Insert(char c)
+    public async Task InsertAsync(char c)
     {
-        if (line.CJKLength() + c.CJKLength() > WindowWidth)
-        {
+        await Task.Run(() => {
+            if (line.CJKLength() + c.CJKLength() > WindowWidth)
+            {
+                if (isEndOfLine)
+                {
+                    NewLine();
+                    line.Append(c);
+                    X_ABS++;
+                    Console.Write(c);
+                }
+                else
+                {
+                    LineOp.Line_Insert(c);
+                    X_ABS++;
+                    var cl = c.CJKLength();
+                    var remaining = LineOp.Line_Right(cl);
+                    LineOp.Line_RemoveRight(cl);
+                    if (hasMoreLines && (_lines[cursorLineIdx + 1].CJKLength() + cl) <= WindowWidth)
+                    {
+                        _lines[cursorLineIdx + 1].Append(remaining);
+                    }
+                    else
+                    {
+                        _lines.Insert(cursorLineIdx + 1, new StringBuilder(remaining));
+                    }
+                    var y = Y_ABS;
+                    RedrawAll();
+                    Y_ABS = y;
+                    drawCursor();
+                }
+                return;
+            }
+            // 在游標所在位置插入字元
+            LineOp.Line_Insert(c);
+            X_ABS++;
+            // 如果游標在行為，就直接寫出來，不然就要把游標後面的字都重寫一次
             if (isEndOfLine)
             {
-                NewLine();
-                line.Append(c);
-                X_ABS++;
                 Console.Write(c);
             }
             else
             {
-                LineOp.Line_Insert(c);
-                X_ABS++;
-                var cl = c.CJKLength();
-                var remaining = LineOp.Line_Right(cl);
-                LineOp.Line_RemoveRight(cl);
-                if (hasMoreLines && (_lines[cursorLineIdx + 1].CJKLength() + cl) <= WindowWidth)
-                {
-                    _lines[cursorLineIdx + 1].Append(remaining);
-                }
-                else
-                {
-                    _lines.Insert(cursorLineIdx + 1, new StringBuilder(remaining));
-                }
-                var y = Y_ABS;
-                RedrawAll();
-                Y_ABS = y;
+                ReDrawLine(cursorLineIdx);
+                Console.CursorVisible = true;
                 drawCursor();
             }
-            return;
-        }
-        // 在游標所在位置插入字元
-        LineOp.Line_Insert(c);
-        X_ABS++;
-        // 如果游標在行為，就直接寫出來，不然就要把游標後面的字都重寫一次
-        if (isEndOfLine)
-        {
-            Console.Write(c);
-        }
-        else
-        {
-            ReDrawLine(cursorLineIdx);
-            Console.CursorVisible = true;
-            drawCursor();
-        }
+        });
     }
     private void drawCursor()
     {
