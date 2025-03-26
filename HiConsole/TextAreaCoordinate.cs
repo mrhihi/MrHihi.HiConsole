@@ -91,6 +91,12 @@ public class TextAreaCoordinate
             }
             Line.Remove(_tac.X_REL, Line.Length - _tac.X_REL);
         }
+        public void Line_RemoveToEnd()
+        {
+            Line.Clear();
+            _tac.ReDrawLine(_tac.cursorLineIdx);
+            _tac.MoveHome();
+        }
         public void Line_RemoveCursorToCount(int count, int xadj = 0)
         {
             int x_rel = _tac.X_REL + xadj;
@@ -363,6 +369,12 @@ public class TextAreaCoordinate
         {
             LineOp.Line_Delete_TryMergeLines();
         }
+        drawCursor();
+    }
+
+    public void DeleteLine()
+    {
+        LineOp.Line_RemoveToEnd();
         drawCursor();
     }
 

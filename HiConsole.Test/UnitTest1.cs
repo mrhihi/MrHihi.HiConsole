@@ -18,6 +18,7 @@ public class UnitTest1
 
     private void startCommandPrompt(enumChatMode mode)
     {
+        ConsoleKeyInfo? prevKeyInfo = null;
         var commandPrompt = new CommandPrompt(mode, "Welcome to HiConsole!", "-> ");;
         commandPrompt.OneLineCommand_EnterPress += (sender, e) =>
         {
@@ -72,6 +73,30 @@ public class UnitTest1
                 }
                 e.Triggered = true;
             }
+        };
+        commandPrompt.KeyPress += (sender, e) =>
+        {
+            if (prevKeyInfo != null)
+            {
+                if (prevKeyInfo.Value.Key == ConsoleKey.Escape)
+                {
+                    if (e.Key.Key == ConsoleKey.C)
+                    {
+                        commandPrompt.TextArea.ResetLines("");
+                        commandPrompt.TextArea.Loop();
+                        e.Processed = true;
+                    }
+                    else if (e.Key.Key == ConsoleKey.D)
+                    {
+                        commandPrompt.TextArea.DeleteLine();
+                        commandPrompt.TextArea.Loop();
+                        e.Processed = true;
+                    }
+                    prevKeyInfo = null;
+                    return;
+                }
+            }
+            prevKeyInfo = e.Key;
         };
         commandPrompt.Start();
     }

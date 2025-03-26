@@ -121,6 +121,8 @@ public class CommandPrompt
     /// <param name="prompt"> Prompt message. </param>
     public void Start()
     {
+        Console.OutputEncoding = Encoding.UTF8;
+        Console.InputEncoding = Encoding.UTF8;
         _textArea.Loop();
         while (true)
         {
